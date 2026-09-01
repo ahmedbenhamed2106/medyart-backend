@@ -29,7 +29,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ROOT_URLCONF = 'medyart.urls'
+ROOT_URLCONF = 'urls'
 
 DATABASES = {
     'default': dj_database_url.config(
