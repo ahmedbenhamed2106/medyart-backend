@@ -7,3 +7,4 @@ requests>=2.31.0
 djangorestframework
 django-cors-headers
 djangorestframework-simplejwt
+stripe
