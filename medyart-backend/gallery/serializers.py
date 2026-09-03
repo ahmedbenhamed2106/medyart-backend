@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import PhotoModel
+from gallery.models import PhotoModel
 
 class PhotoSerializer(serializers.ModelSerializer):
     class Meta:
