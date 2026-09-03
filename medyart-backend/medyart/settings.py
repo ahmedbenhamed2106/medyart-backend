@@ -19,6 +19,7 @@ INSTALLED_APPS = [
     'gallery',
     'rest_framework',
     'corsheaders',
+    'rest_framework_simplejwt',
 ]
 
 MIDDLEWARE = [
