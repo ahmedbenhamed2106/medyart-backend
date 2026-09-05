@@ -8,3 +8,6 @@ djangorestframework
 django-cors-headers
 djangorestframework-simplejwt
 stripe
+pyotp
+qrcode
+Pillow
