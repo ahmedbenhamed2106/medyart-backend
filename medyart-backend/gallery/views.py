@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from rest_framework import viewsets, status, permissions
+from rest_framework import viewsets, status, permissions, generics
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth.models import User
@@ -18,7 +18,13 @@ from .serializers import (
     ProfileSerializer
 )
 
-# 1. VIEWSETS FOR ROUTER IN URLS.PY
+# 1. AUTH / USER REGISTRATION VIEW
+class RegisterView(generics.CreateAPIView):
+    queryset = User.objects.all()
+    permission_classes = (permissions.AllowAny,)
+    serializer_class = UserRegisterSerializer
+
+# 2. VIEWSETS FOR ROUTER IN URLS.PY
 class PhotoViewSet(viewsets.ModelViewSet):
     queryset = PhotoModel.objects.all().order_by('-created_at')
     serializer_class = PhotoSerializer
@@ -34,7 +40,7 @@ class InteractionViewSet(viewsets.ModelViewSet):
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = OrderModel.objects.all().order_by('-created_at')
 
-# 2. CLASS-BASED VIEWS
+# 3. CLASS-BASED VIEWS
 class PhotoListCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -56,7 +62,7 @@ class PhotoListCreateView(APIView):
         photo = PhotoModel.objects.create(title=title, image_url=image_url)
         return Response(PhotoSerializer(photo).data, status=status.HTTP_201_CREATED)
 
-# 3. ACCOUNT MANAGEMENT VIEW
+# 4. ACCOUNT MANAGEMENT VIEW
 class UpdateAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -77,7 +83,7 @@ class UpdateAccountView(APIView):
         user.save()
         return Response({"message": "Account details updated successfully", "username": user.username})
 
-# 4. TWO-FACTOR AUTHENTICATION VIEWS
+# 5. TWO-FACTOR AUTHENTICATION VIEWS
 class TwoFactorSetupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
