@@ -24,7 +24,24 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = (permissions.AllowAny,)
     serializer_class = UserRegisterSerializer
 
-# 2. VIEWSETS FOR ROUTER IN URLS.PY
+# 2. STRIPE / PAYMENT VIEW
+class CreatePaymentIntentView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        photo_id = request.data.get('photo_id')
+        resolution = request.data.get('resolution')
+
+        if not photo_id or not resolution:
+            return Response({"detail": "photo_id and resolution are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Basic placeholder logic for Stripe Integration
+        return Response({
+            "clientSecret": "mock_stripe_client_secret",
+            "message": "Payment intent created successfully"
+        }, status=status.HTTP_200_OK)
+
+# 3. ROUTER VIEWSETS
 class PhotoViewSet(viewsets.ModelViewSet):
     queryset = PhotoModel.objects.all().order_by('-created_at')
     serializer_class = PhotoSerializer
@@ -39,8 +56,9 @@ class InteractionViewSet(viewsets.ModelViewSet):
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = OrderModel.objects.all().order_by('-created_at')
+    serializer_class = PhotoSerializer  # Default serializer fallback
 
-# 3. CLASS-BASED VIEWS
+# 4. CLASS-BASED VIEWS
 class PhotoListCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -62,7 +80,7 @@ class PhotoListCreateView(APIView):
         photo = PhotoModel.objects.create(title=title, image_url=image_url)
         return Response(PhotoSerializer(photo).data, status=status.HTTP_201_CREATED)
 
-# 4. ACCOUNT MANAGEMENT VIEW
+# 5. ACCOUNT MANAGEMENT VIEW
 class UpdateAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -83,7 +101,7 @@ class UpdateAccountView(APIView):
         user.save()
         return Response({"message": "Account details updated successfully", "username": user.username})
 
-# 5. TWO-FACTOR AUTHENTICATION VIEWS
+# 6. TWO-FACTOR AUTHENTICATION VIEWS
 class TwoFactorSetupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
