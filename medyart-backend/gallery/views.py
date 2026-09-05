@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
+from rest_framework import viewsets, status, permissions
 from rest_framework.response import Response
-from rest_framework import status, permissions
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth.models import User
 from django.contrib.auth import update_session_auth_hash
@@ -8,8 +8,7 @@ import pyotp
 import qrcode
 import io
 import base64
-from .models import PhotoModel, Profile# Ensure Profile model stores 2fa_secret & is_2fa_enabled
-from .serializers import PhotoSerializer
+
 from .models import PhotoModel, InteractionModel, CommentModel, Profile
 from .serializers import (
     UserRegisterSerializer, 
@@ -19,7 +18,12 @@ from .serializers import (
     ProfileSerializer
 )
 
-# 1. FIX PHOTO UPLOAD (Handles Multipart Files cleanly)
+# 1. VIEWSET FOR URLS (Fixes the ImportError: cannot import name 'PhotoViewSet')
+class PhotoViewSet(viewsets.ModelViewSet):
+    queryset = PhotoModel.objects.all().order_by('-created_at')
+    serializer_class = PhotoSerializer
+
+# 2. CLASS-BASED VIEW FOR PHOTOS (Fixes PhotoModel reference)
 class PhotoListCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -33,16 +37,16 @@ class PhotoListCreateView(APIView):
             return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
         
         title = request.data.get('title')
-        image_file = request.FILES.get('image')
+        image_url = request.data.get('image_url')
 
-        if not title or not image_file:
-            return Response({"detail": "Title and image file are required"}, status=status.HTTP_400_BAD_REQUEST)
+        if not title or not image_url:
+            return Response({"detail": "Title and image_url are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Save photo instance
-        photo = Photo.objects.create(title=title, image=image_file, owner=request.user)
+        # Save PhotoModel instance using image_url matching your models.py
+        photo = PhotoModel.objects.create(title=title, image_url=image_url)
         return Response(PhotoSerializer(photo).data, status=status.HTTP_201_CREATED)
 
-# 2. ACCOUNT MANAGEMENT VIEW
+# 3. ACCOUNT MANAGEMENT VIEW
 class UpdateAccountView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -63,7 +67,7 @@ class UpdateAccountView(APIView):
         user.save()
         return Response({"message": "Account details updated successfully", "username": user.username})
 
-# 3. TWO-FACTOR AUTHENTICATION VIEWS
+# 4. TWO-FACTOR AUTHENTICATION VIEWS
 class TwoFactorSetupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
@@ -72,7 +76,6 @@ class TwoFactorSetupView(APIView):
         totp = pyotp.TOTP(secret)
         qr_url = totp.provisioning_uri(name=request.user.email or request.user.username, issuer_name="MedyArt")
         
-        # Generate QR Code Image
         img = qrcode.make(qr_url)
         buf = io.BytesIO()
         img.save(buf)
