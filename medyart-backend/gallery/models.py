@@ -1,6 +1,15 @@
 from django.db import models
 from django.contrib.auth.models import User
 
+# Profile model for 2FA settings
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    two_factor_secret = models.CharField(max_length=64, blank=True, null=True)
+    is_2fa_enabled = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.username}'s Profile"
+
 class PhotoModel(models.Model):
     title = models.CharField(max_length=255)
     image_url = models.URLField()
