@@ -8,7 +8,7 @@ import pyotp
 import qrcode
 import io
 import base64
-from .models import Photo, Profile  # Ensure Profile model stores 2fa_secret & is_2fa_enabled
+from .models import PhotoModel, Profile# Ensure Profile model stores 2fa_secret & is_2fa_enabled
 from .serializers import PhotoSerializer
 
 # 1. FIX PHOTO UPLOAD (Handles Multipart Files cleanly)
