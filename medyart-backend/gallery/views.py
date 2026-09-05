@@ -10,6 +10,14 @@ import io
 import base64
 from .models import PhotoModel, Profile# Ensure Profile model stores 2fa_secret & is_2fa_enabled
 from .serializers import PhotoSerializer
+from .models import PhotoModel, InteractionModel, CommentModel, Profile
+from .serializers import (
+    UserRegisterSerializer, 
+    CommentSerializer, 
+    InteractionSerializer, 
+    PhotoSerializer, 
+    ProfileSerializer
+)
 
 # 1. FIX PHOTO UPLOAD (Handles Multipart Files cleanly)
 class PhotoListCreateView(APIView):
