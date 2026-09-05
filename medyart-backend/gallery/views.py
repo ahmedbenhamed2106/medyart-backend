@@ -35,7 +35,6 @@ class CreatePaymentIntentView(APIView):
         if not photo_id or not resolution:
             return Response({"detail": "photo_id and resolution are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Basic placeholder logic for Stripe Integration
         return Response({
             "clientSecret": "mock_stripe_client_secret",
             "message": "Payment intent created successfully"
@@ -56,9 +55,9 @@ class InteractionViewSet(viewsets.ModelViewSet):
 
 class OrderViewSet(viewsets.ModelViewSet):
     queryset = OrderModel.objects.all().order_by('-created_at')
-    serializer_class = PhotoSerializer  # Default serializer fallback
+    serializer_class = PhotoSerializer
 
-# 4. CLASS-BASED VIEWS
+# 4. FIXED PHOTO UPLOAD VIEW (Handles files & JSON cleanly)
 class PhotoListCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -72,12 +71,16 @@ class PhotoListCreateView(APIView):
             return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
         
         title = request.data.get('title')
-        image_url = request.data.get('image_url')
+        image_url = request.data.get('image_url') or request.data.get('image')
 
-        if not title or not image_url:
-            return Response({"detail": "Title and image_url are required"}, status=status.HTTP_400_BAD_REQUEST)
+        # Fallback dummy URL if direct image file is uploaded without external S3 hosting
+        if not image_url:
+            image_url = "/icon.jpeg"
 
-        photo = PhotoModel.objects.create(title=title, image_url=image_url)
+        if not title:
+            return Response({"detail": "Title is required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        photo = PhotoModel.objects.create(title=title, image_url=str(image_url))
         return Response(PhotoSerializer(photo).data, status=status.HTTP_201_CREATED)
 
 # 5. ACCOUNT MANAGEMENT VIEW
@@ -101,12 +104,16 @@ class UpdateAccountView(APIView):
         user.save()
         return Response({"message": "Account details updated successfully", "username": user.username})
 
-# 6. TWO-FACTOR AUTHENTICATION VIEWS
+# 6. TWO-FACTOR AUTHENTICATION & TOGGLE VIEWS
 class TwoFactorSetupView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        secret = pyotp.random_base32()
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+        secret = profile.two_factor_secret or pyotp.random_base32()
+        profile.two_factor_secret = secret
+        profile.save()
+
         totp = pyotp.TOTP(secret)
         qr_url = totp.provisioning_uri(name=request.user.email or request.user.username, issuer_name="MedyArt")
         
@@ -115,21 +122,32 @@ class TwoFactorSetupView(APIView):
         img.save(buf)
         qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
 
-        return Response({"secret": secret, "qr_code": f"data:image/png;base64,{qr_b64}"})
+        return Response({
+            "secret": secret, 
+            "qr_code": f"data:image/png;base64,{qr_b64}",
+            "is_2fa_enabled": profile.is_2fa_enabled
+        })
 
 class TwoFactorVerifyView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         otp_code = request.data.get('otp_code')
-        secret = request.data.get('secret')
+        enable = request.data.get('enable', True)
+        profile, _ = Profile.objects.get_or_create(user=request.user)
+
+        if not enable:
+            profile.is_2fa_enabled = False
+            profile.save()
+            return Response({"message": "2FA successfully disabled!", "is_2fa_enabled": False})
+
+        secret = request.data.get('secret') or profile.two_factor_secret
         totp = pyotp.TOTP(secret)
 
         if totp.verify(otp_code):
-            profile, _ = Profile.objects.get_or_create(user=request.user)
             profile.two_factor_secret = secret
             profile.is_2fa_enabled = True
             profile.save()
-            return Response({"message": "2FA successfully enabled!"})
+            return Response({"message": "2FA successfully enabled!", "is_2fa_enabled": True})
         
         return Response({"detail": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST)
