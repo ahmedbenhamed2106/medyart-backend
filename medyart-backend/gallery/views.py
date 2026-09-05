@@ -16,10 +16,10 @@ class PhotoListCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def get(self, request):
-        photos = Photo.objects.all().order_by('-created_at')
+        photos = PhotoModel.objects.all().order_by('-created_at')
         serializer = PhotoSerializer(photos, many=True)
         return Response(serializer.data)
-
+        
     def post(self, request):
         if not request.user.is_authenticated:
             return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
