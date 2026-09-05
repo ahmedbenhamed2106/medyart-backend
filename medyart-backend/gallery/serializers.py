@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
-from gallery.models import PhotoModel, InteractionModel, CommentModel
+from gallery.models import PhotoModel, InteractionModel, CommentModel, Profile
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -45,3 +45,11 @@ class PhotoSerializer(serializers.ModelSerializer):
 
     def get_dislikes_count(self, obj):
         return obj.interactions.filter(vote='dislike').count()
+
+# Profile Serializer for 2FA status and details
+class ProfileSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'user', 'is_2fa_enabled']
