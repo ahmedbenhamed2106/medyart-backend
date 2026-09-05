@@ -9,7 +9,7 @@ import qrcode
 import io
 import base64
 
-from .models import PhotoModel, InteractionModel, CommentModel, Profile
+from .models import PhotoModel, InteractionModel, CommentModel, OrderModel, Profile
 from .serializers import (
     UserRegisterSerializer, 
     CommentSerializer, 
@@ -18,12 +18,23 @@ from .serializers import (
     ProfileSerializer
 )
 
-# 1. VIEWSET FOR URLS (Fixes the ImportError: cannot import name 'PhotoViewSet')
+# 1. VIEWSETS FOR ROUTER IN URLS.PY
 class PhotoViewSet(viewsets.ModelViewSet):
     queryset = PhotoModel.objects.all().order_by('-created_at')
     serializer_class = PhotoSerializer
 
-# 2. CLASS-BASED VIEW FOR PHOTOS (Fixes PhotoModel reference)
+class CommentViewSet(viewsets.ModelViewSet):
+    queryset = CommentModel.objects.all().order_by('-created_at')
+    serializer_class = CommentSerializer
+
+class InteractionViewSet(viewsets.ModelViewSet):
+    queryset = InteractionModel.objects.all()
+    serializer_class = InteractionSerializer
+
+class OrderViewSet(viewsets.ModelViewSet):
+    queryset = OrderModel.objects.all().order_by('-created_at')
+
+# 2. CLASS-BASED VIEWS
 class PhotoListCreateView(APIView):
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
@@ -42,7 +53,6 @@ class PhotoListCreateView(APIView):
         if not title or not image_url:
             return Response({"detail": "Title and image_url are required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Save PhotoModel instance using image_url matching your models.py
         photo = PhotoModel.objects.create(title=title, image_url=image_url)
         return Response(PhotoSerializer(photo).data, status=status.HTTP_201_CREATED)
 
