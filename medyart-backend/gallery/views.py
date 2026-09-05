@@ -1,90 +1,90 @@
-import os
-import stripe
-from rest_framework import viewsets, generics, status
+from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework import status, permissions
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.contrib.auth.models import User
-from gallery.models import PhotoModel, InteractionModel, CommentModel, OrderModel
-from gallery.serializers import (
-    PhotoSerializer,
-    InteractionSerializer,
-    CommentSerializer,
-    UserRegisterSerializer
-)
+from django.contrib.auth import update_session_auth_hash
+import pyotp
+import qrcode
+import io
+import base64
+from .models import Photo, Profile  # Ensure Profile model stores 2fa_secret & is_2fa_enabled
+from .serializers import PhotoSerializer
 
-stripe.api_key = os.environ.get('STRIPE_SECRET_KEY', 'sk_test_dummy_key')
+# 1. FIX PHOTO UPLOAD (Handles Multipart Files cleanly)
+class PhotoListCreateView(APIView):
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
-PRICING_TIERS = {
-    'HD': 300,       # $3.00 in cents
-    '1080P': 500,    # $5.00 in cents
-    '1440P': 700,    # $7.00 in cents
-    '4K': 900,       # $9.00 in cents
-    '8K': 1200,      # $12.00 in cents
-}
+    def get(self, request):
+        photos = Photo.objects.all().order_by('-created_at')
+        serializer = PhotoSerializer(photos, many=True)
+        return Response(serializer.data)
 
-class CreatePaymentIntentView(generics.CreateAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def post(self, request, *args, **kwargs):
-        photo_id = request.data.get('photo_id')
-        resolution = request.data.get('resolution', '').upper()
-
-        if resolution not in PRICING_TIERS:
-            return Response({'error': 'Invalid resolution tier'}, status=status.HTTP_400_BAD_REQUEST)
-
-        amount_cents = PRICING_TIERS[resolution]
-
-        try:
-            intent = stripe.PaymentIntent.create(
-                amount=amount_cents,
-                currency='usd',
-                metadata={'user_id': request.user.id, 'photo_id': photo_id, 'resolution': resolution}
-            )
-
-            OrderModel.objects.create(
-                user=request.user,
-                photo_id=photo_id,
-                resolution=resolution,
-                amount=amount_cents / 100,
-                stripe_intent_id=intent['id']
-            )
-
-            return Response({'clientSecret': intent['client_secret']}, status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-class RegisterView(generics.CreateAPIView):
-    queryset = User.objects.all()
-    permission_classes = [AllowAny]
-    serializer_class = UserRegisterSerializer
-
-class PhotoViewSet(viewsets.ModelViewSet):
-    queryset = PhotoModel.objects.all().order_by('-created_at')
-    serializer_class = PhotoSerializer
-
-class CommentViewSet(viewsets.ModelViewSet):
-    queryset = CommentModel.objects.all()
-    serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated]
-
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
-
-class InteractionViewSet(viewsets.ModelViewSet):
-    queryset = InteractionModel.objects.all()
-    serializer_class = InteractionSerializer
-    permission_classes = [IsAuthenticated]
-
-    def create(self, request, *args, **kwargs):
-        user = request.user
-        photo_id = request.data.get('photo')
-        vote_type = request.data.get('vote')
-
-        interaction, created = InteractionModel.objects.update_or_create(
-            user=user,
-            photo_id=photo_id,
-            defaults={'vote': vote_type}
-        )
+    def post(self, request):
+        if not request.user.is_authenticated:
+            return Response({"detail": "Authentication required"}, status=status.HTTP_401_UNAUTHORIZED)
         
-        serializer = self.get_serializer(interaction)
-        return Response(serializer.data, status=status.HTTP_200_OK if not created else status.HTTP_201_CREATED)
+        title = request.data.get('title')
+        image_file = request.FILES.get('image')
+
+        if not title or not image_file:
+            return Response({"detail": "Title and image file are required"}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Save photo instance
+        photo = Photo.objects.create(title=title, image=image_file, owner=request.user)
+        return Response(PhotoSerializer(photo).data, status=status.HTTP_201_CREATED)
+
+# 2. ACCOUNT MANAGEMENT VIEW
+class UpdateAccountView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def put(self, request):
+        user = request.user
+        new_username = request.data.get('username')
+        new_email = request.data.get('email')
+        new_password = request.data.get('password')
+
+        if new_username:
+            user.username = new_username
+        if new_email:
+            user.email = new_email
+        if new_password:
+            user.set_password(new_password)
+            update_session_auth_hash(request, user)
+
+        user.save()
+        return Response({"message": "Account details updated successfully", "username": user.username})
+
+# 3. TWO-FACTOR AUTHENTICATION VIEWS
+class TwoFactorSetupView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        secret = pyotp.random_base32()
+        totp = pyotp.TOTP(secret)
+        qr_url = totp.provisioning_uri(name=request.user.email or request.user.username, issuer_name="MedyArt")
+        
+        # Generate QR Code Image
+        img = qrcode.make(qr_url)
+        buf = io.BytesIO()
+        img.save(buf)
+        qr_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+
+        return Response({"secret": secret, "qr_code": f"data:image/png;base64,{qr_b64}"})
+
+class TwoFactorVerifyView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        otp_code = request.data.get('otp_code')
+        secret = request.data.get('secret')
+        totp = pyotp.TOTP(secret)
+
+        if totp.verify(otp_code):
+            profile, _ = Profile.objects.get_or_create(user=request.user)
+            profile.two_factor_secret = secret
+            profile.is_2fa_enabled = True
+            profile.save()
+            return Response({"message": "2FA successfully enabled!"})
+        
+        return Response({"detail": "Invalid OTP code"}, status=status.HTTP_400_BAD_REQUEST)
