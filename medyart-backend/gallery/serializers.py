@@ -10,22 +10,26 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         fields = ['username', 'email', 'password']
 
     def create(self, validated_data):
+        # Auto-set username to email if not explicitly provided
+        email = validated_data.get('email', '')
+        username = validated_data.get('username') or email
+        
         user = User.objects.create_user(
-            username=validated_data['username'],
-            email=validated_data.get('email', ''),
+            username=username,
+            email=email,
             password=validated_data['password']
         )
         return user
 
 class CommentSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.username')
+    user = serializers.ReadOnlyField(source='user.email')
 
     class Meta:
         model = CommentModel
         fields = ['id', 'user', 'photo', 'text', 'created_at']
 
 class InteractionSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.username')
+    user = serializers.ReadOnlyField(source='user.email')
 
     class Meta:
         model = InteractionModel
@@ -46,9 +50,8 @@ class PhotoSerializer(serializers.ModelSerializer):
     def get_dislikes_count(self, obj):
         return obj.interactions.filter(vote='dislike').count()
 
-# Profile Serializer for 2FA status and details
 class ProfileSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.username')
+    user = serializers.ReadOnlyField(source='user.email')
 
     class Meta:
         model = Profile
