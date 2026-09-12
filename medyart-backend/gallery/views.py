@@ -29,8 +29,20 @@ class PhotoViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+    def create(self, request, *args, **kwargs):
+        title = request.data.get('title', 'Untitled')
+        image_file = request.FILES.get('image') or request.FILES.get('file')
+
+        if not image_file:
+            return Response({"detail": "An image file is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        photo = Photo.objects.create(
+            user=request.user,
+            title=title,
+            image=image_file
+        )
+        serializer = self.get_serializer(photo)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 class CommentViewSet(viewsets.ModelViewSet):
