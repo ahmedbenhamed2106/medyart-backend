@@ -1,6 +1,57 @@
 from rest_framework import permissions, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from .models import Photo, InteractionModel, CommentModel
+
+class PhotoListCreateView(APIView):
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def get(self, request):
+        photos = Photo.objects.all().order_by('-created_at')
+        data = []
+        for photo in photos:
+            likes = photo.interactions.filter(vote='like').count()
+            dislikes = photo.interactions.filter(vote='dislike').count()
+            user_vote = None
+            if request.user.is_authenticated:
+                v = photo.interactions.filter(user=request.user).first()
+                if v:
+                    user_vote = v.vote
+
+            comments = [{
+                'id': c.id,
+                'username': c.user.username,
+                'text': c.text,
+                'updated_at': c.updated_at
+            } for c in photo.comments.all().order_by('-updated_at')]
+
+            data.append({
+                'id': photo.id,
+                'title': photo.title,
+                'image_url': photo.image.url if photo.image else photo.image_url,
+                'likes': likes,
+                'dislikes': dislikes,
+                'user_vote': user_vote,
+                'comments': comments,
+                'owner': photo.user.username
+            })
+        return Response(data)
+
+    def post(self, request):
+        title = request.data.get('title', 'Untitled')
+        image_file = request.FILES.get('image') or request.FILES.get('file')
+
+        if not image_file:
+            return Response({"detail": "An image file is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        photo = Photo.objects.create(
+            user=request.user,
+            title=title,
+            image=image_file
+        )
+        return Response({'id': photo.id, 'title': photo.title}, status=status.HTTP_201_CREATED)
 
 class AccountUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
