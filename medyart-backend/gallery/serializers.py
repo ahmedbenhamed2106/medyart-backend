@@ -1,6 +1,17 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from gallery.models import PhotoModel, InteractionModel, CommentModel, Profile
+from .models import Photo
+
+
+class PhotoSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+
+    class Meta:
+        model = Photo
+        fields = ['id', 'user', 'title', 'image', 'image_url', 'created_at']
+
+
 
 class UserRegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -36,6 +47,7 @@ class InteractionSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'photo', 'vote', 'created_at']
 
 class PhotoSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
     likes_count = serializers.SerializerMethodField()
     dislikes_count = serializers.SerializerMethodField()
     comments = CommentSerializer(many=True, read_only=True)
