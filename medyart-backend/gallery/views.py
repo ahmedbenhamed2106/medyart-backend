@@ -1,8 +1,18 @@
-from rest_framework import permissions, status
+from rest_framework import permissions, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from .models import Photo, InteractionModel, CommentModel
+from .serializers import PhotoSerializer
+
+class PhotoViewSet(viewsets.ModelViewSet):
+    queryset = Photo.objects.all().order_by('-created_at')
+    serializer_class = PhotoSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
 class PhotoListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
