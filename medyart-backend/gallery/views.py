@@ -2,8 +2,26 @@ from rest_framework import permissions, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from .models import Photo, InteractionModel, CommentModel
-from .serializers import PhotoSerializer
+from django.contrib.auth.models import User
+
+# Safe model imports
+try:
+    from gallery.models import PhotoModel as Photo
+except ImportError:
+    try:
+        from gallery.models import PhotoModel
+        Photo = PhotoModel
+    except ImportError:
+        from gallery.models import Photo
+
+from gallery.models import InteractionModel, CommentModel
+from gallery.serializers import (
+    PhotoSerializer,
+    CommentSerializer,
+    InteractionSerializer,
+    UserRegisterSerializer
+)
+
 
 class PhotoViewSet(viewsets.ModelViewSet):
     queryset = Photo.objects.all().order_by('-created_at')
@@ -13,6 +31,47 @@ class PhotoViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    queryset = CommentModel.objects.all().order_by('-created_at')
+    serializer_class = CommentSerializer
+    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class InteractionViewSet(viewsets.ModelViewSet):
+    queryset = InteractionModel.objects.all()
+    serializer_class = InteractionSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class RegisterView(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def post(self, request):
+        serializer = UserRegisterSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "User registered successfully."}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class CreatePaymentIntentView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        # Stub for payment intent creation
+        return Response({
+            "clientSecret": "mock_client_secret_demo",
+            "message": "Payment intent created successfully."
+        }, status=status.HTTP_200_OK)
+
 
 class PhotoListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
@@ -34,13 +93,13 @@ class PhotoListCreateView(APIView):
                 'id': c.id,
                 'username': c.user.username,
                 'text': c.text,
-                'updated_at': c.updated_at
-            } for c in photo.comments.all().order_by('-updated_at')]
+                'created_at': c.created_at
+            } for c in photo.comments.all().order_by('-created_at')]
 
             data.append({
                 'id': photo.id,
                 'title': photo.title,
-                'image_url': photo.image.url if photo.image else photo.image_url,
+                'image_url': photo.image.url if getattr(photo, 'image', None) else getattr(photo, 'image_url', ''),
                 'likes': likes,
                 'dislikes': dislikes,
                 'user_vote': user_vote,
@@ -62,6 +121,7 @@ class PhotoListCreateView(APIView):
             image=image_file
         )
         return Response({'id': photo.id, 'title': photo.title}, status=status.HTTP_201_CREATED)
+
 
 class AccountUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
