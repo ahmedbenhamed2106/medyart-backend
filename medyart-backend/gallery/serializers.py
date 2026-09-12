@@ -45,7 +45,7 @@ class CommentSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CommentModel
-        fields = ['id', 'user', 'photo', 'text', 'created_at']
+        fields = ['id', 'user', 'photo', 'text', 'updated_at']
 
 
 class InteractionSerializer(serializers.ModelSerializer):
@@ -53,7 +53,7 @@ class InteractionSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InteractionModel
-        fields = ['id', 'user', 'photo', 'vote', 'created_at']
+        fields = ['id', 'user', 'photo', 'vote']
 
 
 class PhotoSerializer(serializers.ModelSerializer):
