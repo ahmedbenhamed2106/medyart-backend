@@ -34,7 +34,7 @@ class PhotoViewSet(viewsets.ModelViewSet):
 
 
 class CommentViewSet(viewsets.ModelViewSet):
-    queryset = CommentModel.objects.all().order_by('-created_at')
+    queryset = CommentModel.objects.all().order_by('-updated_at')
     serializer_class = CommentSerializer
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
@@ -66,7 +66,6 @@ class CreatePaymentIntentView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
-        # Stub for payment intent creation
         return Response({
             "clientSecret": "mock_client_secret_demo",
             "message": "Payment intent created successfully."
@@ -93,8 +92,8 @@ class PhotoListCreateView(APIView):
                 'id': c.id,
                 'username': c.user.username,
                 'text': c.text,
-                'created_at': c.created_at
-            } for c in photo.comments.all().order_by('-created_at')]
+                'updated_at': c.updated_at
+            } for c in photo.comments.all().order_by('-updated_at')]
 
             data.append({
                 'id': photo.id,
