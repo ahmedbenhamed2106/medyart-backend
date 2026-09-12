@@ -1,30 +1,82 @@
-from django.contrib import admin
-from django.urls import path, include
-from rest_framework.routers import DefaultRouter
-from rest_framework_simplejwt.views import (
-    TokenObtainPairView,
-    TokenRefreshView,
-)
-from gallery.views import (
-    PhotoViewSet,
-    CommentViewSet,
-    InteractionViewSet,
-    RegisterView,
-    CreatePaymentIntentView,
-    AccountUpdateView
-)
+from rest_framework import serializers
+from django.contrib.auth.models import User
+from gallery.models import InteractionModel, CommentModel
 
-router = DefaultRouter()
-router.register(r'photos', PhotoViewSet)
-router.register(r'comments', CommentViewSet)
-router.register(r'interactions', InteractionViewSet)
+# Import PhotoModel/Photo and Profile with safe fallbacks
+try:
+    from gallery.models import PhotoModel as Photo
+except ImportError:
+    try:
+        from gallery.models import PhotoModel
+        Photo = PhotoModel
+    except ImportError:
+        from gallery.models import Photo
 
-urlpatterns = [
-    path('admin/', admin.site.urls),
-    path('api/', include(router.urls)),
-    path('api/register/', RegisterView.as_view(), name='register'),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/create-payment-intent/', CreatePaymentIntentView.as_view(), name='create_payment_intent'),
-    path('api/account/update/', AccountUpdateView.as_view(), name='account-update'),
-]
+try:
+    from gallery.models import Profile
+except ImportError:
+    try:
+        from gallery.models import ModelProfile as Profile
+    except ImportError:
+        Profile = None
+
+
+class UserRegisterSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = ['username', 'email', 'password']
+
+    def create(self, validated_data):
+        email = validated_data.get('email', '')
+        username = validated_data.get('username') or email
+        
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            password=validated_data['password']
+        )
+        return user
+
+
+class CommentSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+
+    class Meta:
+        model = CommentModel
+        fields = ['id', 'user', 'photo', 'text', 'created_at']
+
+
+class InteractionSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+
+    class Meta:
+        model = InteractionModel
+        fields = ['id', 'user', 'photo', 'vote', 'created_at']
+
+
+class PhotoSerializer(serializers.ModelSerializer):
+    user = serializers.ReadOnlyField(source='user.username')
+    likes_count = serializers.SerializerMethodField()
+    dislikes_count = serializers.SerializerMethodField()
+    comments = CommentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Photo
+        fields = ['id', 'user', 'title', 'image', 'image_url', 'created_at', 'likes_count', 'dislikes_count', 'comments']
+
+    def get_likes_count(self, obj):
+        return obj.interactions.filter(vote='like').count()
+
+    def get_dislikes_count(self, obj):
+        return obj.interactions.filter(vote='dislike').count()
+
+
+if Profile:
+    class ProfileSerializer(serializers.ModelSerializer):
+        user = serializers.ReadOnlyField(source='user.email')
+
+        class Meta:
+            model = Profile
+            fields = ['id', 'user', 'is_2fa_enabled']
