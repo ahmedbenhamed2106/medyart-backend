@@ -1,70 +1,30 @@
-from rest_framework import serializers
-from django.contrib.auth.models import User
-from gallery.models import PhotoModel, InteractionModel, CommentModel, Profile
-from .models import Photo
+from django.contrib import admin
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import (
+    TokenObtainPairView,
+    TokenRefreshView,
+)
+from gallery.views import (
+    PhotoViewSet,
+    CommentViewSet,
+    InteractionViewSet,
+    RegisterView,
+    CreatePaymentIntentView,
+    AccountUpdateView
+)
 
+router = DefaultRouter()
+router.register(r'photos', PhotoViewSet)
+router.register(r'comments', CommentViewSet)
+router.register(r'interactions', InteractionViewSet)
 
-class PhotoSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.username')
-
-    class Meta:
-        model = Photo
-        fields = ['id', 'user', 'title', 'image', 'image_url', 'created_at']
-
-
-
-class UserRegisterSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
-
-    class Meta:
-        model = User
-        fields = ['username', 'email', 'password']
-
-    def create(self, validated_data):
-        # Auto-set username to email if not explicitly provided
-        email = validated_data.get('email', '')
-        username = validated_data.get('username') or email
-        
-        user = User.objects.create_user(
-            username=username,
-            email=email,
-            password=validated_data['password']
-        )
-        return user
-
-class CommentSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.email')
-
-    class Meta:
-        model = CommentModel
-        fields = ['id', 'user', 'photo', 'text', 'created_at']
-
-class InteractionSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.email')
-
-    class Meta:
-        model = InteractionModel
-        fields = ['id', 'user', 'photo', 'vote', 'created_at']
-
-class PhotoSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.username')
-    likes_count = serializers.SerializerMethodField()
-    dislikes_count = serializers.SerializerMethodField()
-    comments = CommentSerializer(many=True, read_only=True)
-
-    class Meta:
-        model = PhotoModel
-        fields = ['id', 'title', 'image_url', 'created_at', 'likes_count', 'dislikes_count', 'comments']
-
-    def get_likes_count(self, obj):
-        return obj.interactions.filter(vote='like').count()
-
-    def get_dislikes_count(self, obj):
-        return obj.interactions.filter(vote='dislike').count()
-
-class ProfileSerializer(serializers.ModelSerializer):
-    user = serializers.ReadOnlyField(source='user.email')
-
-    class Meta:
-        model = Profile
-        fields = ['id', 'user', 'is_2fa_enabled']
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/', include(router.urls)),
+    path('api/register/', RegisterView.as_view(), name='register'),
+    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/create-payment-intent/', CreatePaymentIntentView.as_view(), name='create_payment_intent'),
+    path('api/account/update/', AccountUpdateView.as_view(), name='account-update'),
+]
